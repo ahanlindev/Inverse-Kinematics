@@ -2,10 +2,10 @@
     "name": "com.ahanlindev.ik",
     "version": "0.1.0",
     "description": "A modest inverse kinematics toolkit",
-    "displayName": "Inverse Kinematics - ahanlindev",
+    "displayName": "IK Toolkit",
     "unity": "2021.3",
     "author": {
-        "name": "Alex Hanlin",
+        "name": "ahanlindev",
         "email": "alexhanlin@utexas.edu"
     },
     "license": "MIT"
