@@ -1,0 +1,14 @@
+{
+    "name": "com.ahanlindev.ik.runtime",
+    "rootNamespace": "ahanlindev",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
