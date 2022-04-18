@@ -1,7 +1,9 @@
 {
     "name": "com.ahanlindev.ik.editor",
     "rootNamespace": "ahanlindev",
-    "references": [],
+    "references": [
+        "GUID:06375178779c80047a71bbfb8fdaac9e"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
