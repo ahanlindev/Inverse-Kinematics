@@ -11,9 +11,9 @@ namespace ahanlindev
         [Tooltip("A string representing the name of this kinematic chain")]
         public string name = "Kinematic Chain";
         [Tooltip("The highest bone on the kinematic chain")]
-        public IKBone start;
+        public IKJoint start;
         [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THE START")]
-        public IKBone endEffector;
+        public IKJoint endEffector;
         [Tooltip("Object or point in space targeted by the end effector")]
         public Transform target;
         [Tooltip("If gizmos are enabled, represent the chain as lines between the bones")]
@@ -71,8 +71,8 @@ namespace ahanlindev
 
                 if (!MISSING_START_BONE)
                 {
-                    IKBone[] children = chain.start.GetComponentsInChildren<IKBone>();
-                    foreach (IKBone child in children)
+                    IKJoint[] children = chain.start.GetComponentsInChildren<IKJoint>();
+                    foreach (IKJoint child in children)
                     {
                         if (child.Equals(chain.endEffector))
                         {

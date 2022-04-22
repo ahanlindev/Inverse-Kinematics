@@ -4,13 +4,13 @@ using UnityEngine;
 
 namespace ahanlindev
 {
-    public class IKBone : MonoBehaviour
+    public class IKJoint : MonoBehaviour
     {
-        [SerializeField] private HashSet<IKBone> childBones;
+        [SerializeField] private HashSet<IKJoint> childBones;
         // Start is called before the first frame update
         void Start()
         {
-            childBones = new HashSet<IKBone>();
+            childBones = new HashSet<IKJoint>();
             updateChildBones();
         }
 
@@ -24,7 +24,7 @@ namespace ahanlindev
         {
             foreach (Transform child in transform)
             {
-                IKBone childBone = child.GetComponent<IKBone>();
+                IKJoint childBone = child.GetComponent<IKJoint>();
                 if (childBone != null && !child.Equals(transform))
                 {
                     childBones.Add(childBone);
