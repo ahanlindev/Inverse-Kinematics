@@ -5,23 +5,24 @@ using UnityEditor;
 
 namespace ahanlindev
 {
-    public class IKJointGenerator : EditorWindow
+    public class IKChainGenerator : EditorWindow
     {
         [HideInInspector] private GameObject _desiredRoot;
         [HideInInspector] private GameObject _desiredEndEffector;
         [HideInInspector] private int timesRemoveClicked = 0;
 
-        [MenuItem("Window/IK Joint Generator")]
+        [MenuItem("Window/IK Chain Generator")]
         public static void ShowWindow()
         {
-            GetWindow(typeof(IKJointGenerator));
+            GetWindow(typeof(IKChainGenerator));
         }
         private void OnGUI()
         {
             
-            GUILayout.Label("Joint Generator", EditorStyles.boldLabel);
+            GUILayout.Label("Kinematic Chain Generator", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(new GUIContent(
-                "Pressing Generate will add an IKJoint component to the supplied root, " + 
+                "Pressing Generate will add an IKChain component to the supplied root if " +
+                "it does not already have one, and add IKJoint components to the root, " +
                 "end effector, and all GameObjects  between them if they do not already " +
                 "have one.\n\n" + "Pressing Remove will perform the inverse, removing all " + 
                 "IKJoint components from these GameObjects. WARNING: THIS IS IRREVERSIBE"
@@ -47,6 +48,12 @@ namespace ahanlindev
         
         private void GenerateJoints() {
             if (inputsAreValid()) {
+                
+                if (_desiredRoot.GetComponent<IKChain>() == null) {
+                    IKChain newChain = _desiredRoot.AddComponent<IKChain>();
+                    newChain.
+                }    
+
                 GameObject current = _desiredEndEffector;
                 while (!current.Equals(_desiredRoot)) {
                     if (current.GetComponent<IKJoint>() == null) {
