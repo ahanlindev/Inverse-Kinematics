@@ -6,16 +6,16 @@ namespace ahanlindev
 {
     public class IKChain : MonoBehaviour
     {
-        [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THE START")]
-        [SerializeField] private Transform _endEffector;
+        [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THIS GAMEOBJECT")]
+        public Transform endEffector;
 
-        [Tooltip("Object or point in space targeted by the end effector")]
-        [SerializeField] private Transform _target;
+        [Tooltip("Object targeted by the end effector")]
+        public Transform target;
 
-        [Tooltip("If true, kinematic chain positions will be updated in FixedUpdate. If false, they will be updated in Update")]
+        [Tooltip("If true, joint positions will be updated in FixedUpdate. If false, they will be updated in Update")]
         [SerializeField] private bool _iterateInFixedUpdate = true;
 
-        [Tooltip("If gizmos are enabled, represent the chain as lines between the bones")]
+        [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
         
         [SerializeField] private bool _drawChain;
         
@@ -55,7 +55,7 @@ namespace ahanlindev
         public void PerformFABRIK() {
             if (!_isValid) {return;}
             List<Transform> jointPositions = new List<Transform>(); // TODO: put list init in its own method
-            Transform current = _endEffector.transform;
+            Transform current = endEffector.transform;
             // traverse up hierarchy to the root of the chain
             while(!current.Equals(_startJoint)) {
                 jointPositions.Add(current);
@@ -67,13 +67,13 @@ namespace ahanlindev
          * Checks that each field of this object contains valid data
          */
         public bool CheckValidity() {
-            bool MISSING_END_EFFECTOR = _endEffector == null;
+            bool MISSING_END_EFFECTOR = endEffector == null;
             bool NON_DESCENDANT_EE = !(MISSING_END_EFFECTOR);
 
             IKJoint[] children = _startJoint.GetComponentsInChildren<IKJoint>();
             foreach (IKJoint child in children)
             {
-                if (child.Equals(_endEffector))
+                if (child.Equals(endEffector))
                 {
                     NON_DESCENDANT_EE = false;
                     break;
@@ -97,7 +97,7 @@ namespace ahanlindev
          private void initPositionList() {
             if (!_isValid) {return;}
             _jointPositions = new List<Transform>();
-            Transform current = _endEffector;
+            Transform current = endEffector;
 
             // traverse up hierarchy to the root of the chain
             while(!current.Equals(_startJoint)) {
@@ -112,7 +112,7 @@ namespace ahanlindev
          */
         public void DrawChainGizmo() {
             if (_isValid) {
-                Transform last = _endEffector.transform;
+                Transform last = endEffector.transform;
                 Transform current = last;
                 while (current != _startJoint.transform)
                 {

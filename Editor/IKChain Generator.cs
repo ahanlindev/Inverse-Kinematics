@@ -51,7 +51,7 @@ namespace ahanlindev
                 
                 if (_desiredRoot.GetComponent<IKChain>() == null) {
                     IKChain newChain = _desiredRoot.AddComponent<IKChain>();
-                    newChain.
+                    newChain.endEffector = _desiredEndEffector.transform;
                 }    
 
                 GameObject current = _desiredEndEffector;
@@ -69,6 +69,11 @@ namespace ahanlindev
 
         private void RemoveJoints() {
             if (inputsAreValid()) {
+                IKChain chain = _desiredRoot.GetComponent<IKChain>();
+                if (chain != null) {
+                    DestroyImmediate(chain);
+                }    
+
                 GameObject current = _desiredEndEffector;
                 while (!current.Equals(_desiredRoot)) {
                     IKJoint[] joints = current.GetComponents<IKJoint>(); 
