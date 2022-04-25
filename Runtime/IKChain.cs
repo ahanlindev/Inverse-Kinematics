@@ -6,10 +6,6 @@ namespace ahanlindev
 {
     public class IKChain : MonoBehaviour
     {
-        [Tooltip("A string representing the name of this kinematic chain")]
-        [SerializeField] private string _name = "Kinematic Chain";
-
-
         [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THE START")]
         [SerializeField] private Transform _endEffector;
 
@@ -24,13 +20,15 @@ namespace ahanlindev
         [SerializeField] private bool _drawChain;
         
         [HideInInspector] private Transform _startJoint;
-        [SerializeField] private List<Transform> _jointPositions;
+
+        [SerializeField] private List<Transform> _jointPositions; // index 0 is end effector
         
         [HideInInspector] private bool _isValid = true; // marked false if anything is broken
 
         private void Start() {
             _startJoint = transform;
             CheckValidity();
+            initPositionList();
         }
 
         private void Update() {
@@ -45,7 +43,11 @@ namespace ahanlindev
             }
         }
 
-
+        private void OnDrawGizmos() {
+            if (_drawChain) {
+                DrawChainGizmo();
+            }
+        }
         /** 
          * Performs the FABRIK algorithm to determine locations for each joint. 
          * If the chain is invalid, returns immediately.
@@ -63,11 +65,8 @@ namespace ahanlindev
         }
         /**
          * Checks that each field of this object contains valid data
-         * @param warnIfInvalid: If true, prints a warning to the console if 
-         * the chain is deemed invalid
          */
         public bool CheckValidity() {
-            bool MISSING_NAME = _name.Equals("");
             bool MISSING_END_EFFECTOR = _endEffector == null;
             bool NON_DESCENDANT_EE = !(MISSING_END_EFFECTOR);
 
@@ -81,13 +80,12 @@ namespace ahanlindev
                 }
             }
 
-            _isValid = !(MISSING_NAME || MISSING_END_EFFECTOR || NON_DESCENDANT_EE);
+            _isValid = !(MISSING_END_EFFECTOR || NON_DESCENDANT_EE);
             if (!_isValid)
             {
-                Debug.LogWarning("Invalid Kinematic Chain \"" + _name + "\". \nExpand for details." + 
-                    (MISSING_NAME ? "\n  - Missing Name" : " ") + 
-                    (MISSING_END_EFFECTOR ? "\n  - Missing End Effector" : " ") +
-                    (NON_DESCENDANT_EE ? "\n  - End Effector is not a descendant of Start Bone" : " ")
+                Debug.LogWarning("Invalid Kinematic Chain. \nExpand for details." + 
+                    (MISSING_END_EFFECTOR ? "\n  - Missing End Effector" : "") +
+                    (NON_DESCENDANT_EE ? "\n  - End Effector is not a descendant of Start Bone" : "")
                 );
             } 
             return _isValid;
@@ -100,30 +98,29 @@ namespace ahanlindev
             if (!_isValid) {return;}
             _jointPositions = new List<Transform>();
             Transform current = _endEffector;
+
             // traverse up hierarchy to the root of the chain
             while(!current.Equals(_startJoint)) {
                 _jointPositions.Add(current);
                 current = current.parent;
             }
-                _jointPositions.Reverse();
-         }
+        }
+
         /** 
          * Draws a magenta line between the joints of this kinematic chain
          * MUST BE CALLED IN OnDrawGizmos or OnDrawGizmosSelected!
-         * If showChain is false, this will effectively do nothing
          */
         public void DrawChainGizmo() {
-            if (_drawChain && _isValid) {
+            if (_isValid) {
                 Transform last = _endEffector.transform;
                 Transform current = last;
-                int debugctr = 0;
-                while (current != _startJoint.transform && debugctr++ < 500)
+                while (current != _startJoint.transform)
                 {
                     current = last.parent.transform;
                     Gizmos.color = Color.magenta;
                     Gizmos.DrawLine(last.transform.position, current.transform.position);
                     last = current;
-                    if (current == null) Debug.LogError("Null bone in kinematic chain \"" + _name + "\"");
+                    if (current == null) Debug.LogError("Null bone in kinematic chain");
                 }
             }
         }
