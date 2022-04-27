@@ -6,20 +6,26 @@ namespace ahanlindev
 {
     public class IKChain : MonoBehaviour
     {
+        // Fields visible in Inspector
         [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THIS GAMEOBJECT")]
-        public Transform endEffector;
+        public Transform endEffector; // TODO public or serialized?
 
         [Tooltip("Object targeted by the end effector")]
-        public Transform target;
-
-        [Tooltip("Acceptable distance from target if target is reachable")]
-        public float tolerance = 1e-6f;
-
-        [Tooltip("If true, joint positions will be updated in FixedUpdate. If false, they will be updated in Update")]
-        [SerializeField] private bool _iterateInFixedUpdate = true;
+        public Transform target; // TODO public or serialized?
 
         [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
         [SerializeField] private bool _drawChain;
+
+        // TODO put these in an "advanced" dropdown. Will require custom drawer
+        [Tooltip("Acceptable distance from target if target is reachable and more iterations of FABRIK are allowed." +
+                 " WARNING: If this is too precise, it can cause a crash if there is no cap on iterations")]
+        public float tolerance = 0.01f;
+
+        [Tooltip("Maximum number of iterations of FABRIK before finishing.")]
+        [SerializeField] private int _maxIterations = 3;
+        [Tooltip("If true, joint positions will be updated in FixedUpdate. If false, they will be updated in Update")]
+        [SerializeField] private bool _iterateInFixedUpdate = true;
+
         
         // Transform of this GameObject
         [HideInInspector] private Transform _rootJoint; 
@@ -27,24 +33,27 @@ namespace ahanlindev
         // index 0 is the position of the root
         [HideInInspector] private List<Transform> _jointTransforms; 
 
-        // index 0 is distance between root and its child in the chain. Updated in FABRIK
+        // index 0 is distance between root and its child in the chain. Updated in FABRIK TODO use local distance from origin?
         [HideInInspector] private List<float> _jointDistances;
 
         // TODO: make list of IKJoints representing constraints. Null if none exists
         
         // marked false if anything is broken
-        [HideInInspector] private bool _isValid = true; 
+        [HideInInspector] private bool _isValid = false; 
     
         private void Awake() {
             _rootJoint = transform;
-            CheckValidity();
+            CheckValidity(true);
             initTransformList();
         }
 
         [ExecuteInEditMode]
         private void OnValidate() {
-            _rootJoint = transform;
-            CheckValidity();
+            // need to ensure validity to draw gizmos TODO move this?
+            if (_drawChain && !_isValid) {
+                _rootJoint = transform;
+                CheckValidity(false);
+            }
         }
 
         private void Update() {
@@ -60,17 +69,17 @@ namespace ahanlindev
         }
 
         private void OnDrawGizmos() {
-            if (_drawChain) {
-                DrawChainGizmo();
-            }
+            DrawChainGizmo();
         }
 
         /** 
          * Performs the FABRIK algorithm to determine locations for each joint. 
-         * If the chain is invalid, returns immediately.
+         * If the chain is invalid or there is no target, returns immediately.
+         * This method is heavily based upon the paper cited in the README.
          */
         private void PerformFABRIK() {
             // Get distance from root and make sure its reachable with sum of joint distances
+            if (target == null) { return; }
             float targetDist = Vector3.Distance(_rootJoint.position, target.position);
             float reachableDist = 0;
             _jointDistances = new List<float>(); // clear list of distances and rebuild it
@@ -87,8 +96,8 @@ namespace ahanlindev
         }   
 
         /**
-         * 
-         * 
+         * Set each joint at the appropriate distance along the line between the root and 
+         * the target
          */
         private void HandleUnreachableTarget() {
             for(int i = 0; i < _jointDistances.Count; i++) {
@@ -96,22 +105,63 @@ namespace ahanlindev
                 Transform child = _jointTransforms[i+1];
                 // get distance between target and joint i
                 float dist = Vector3.Distance(target.position, parent.position);
-                float lambda = _jointDistances[i] / dist;
+                float tval = _jointDistances[i] / dist;
 
-                // set position of (i+1)th joint based on distance
-                child.position = (1 - lambda) * parent.position + lambda * target.position;
+                // lerp position of (i+1)th joint based on distance
+                child.position = Vector3.Lerp(parent.position, target.position, tval);
             }
         }
 
-
+        /**
+         * Iteratively approximates the end effector towards the target point, stopping when
+         * it either reaches the threshold or the maximum allowed iterations.
+         */
         private void HandleReachableTarget() {
+            // save original root position
+            Vector3 startingRootPos = _rootJoint.position;
+            // If end effector isn't on target, iterate the algorithm
+            int iteration = 0;
+            while (Vector3.Distance(endEffector.position, target.position) > tolerance && iteration++ < _maxIterations) {
+                // FORWARD
+                // Set end effector position to target
+                endEffector.position = target.position;
+                // iterate down the chain and set each position to a reasonable location
+                for (int i = _jointDistances.Count - 1; i >= 0; i--) {
+                    Transform current = _jointTransforms[i];
+                    Transform next = _jointTransforms[i+1];
 
+                    // get the distance between current and next at this moment
+                    float tempDist = Vector3.Distance(next.position, current.position);
+
+                    // lerp current to the appropriate distance away from the next joint
+                    float tval = _jointDistances[i] / tempDist;
+
+                    current.position = Vector3.LerpUnclamped(next.position, current.position, tval);
+                }
+
+                // BACKWARD
+                // Set root position to start
+                _rootJoint.position = startingRootPos;
+                // iterate up the chain and set each position to a reasonable location
+                for (int i = 0; i < _jointDistances.Count; i++) {
+                    Transform current = _jointTransforms[i];
+                    Transform next = _jointTransforms[i+1]; 
+
+                    // get the distance between current and next at this moment
+                    float tempDist = Vector3.Distance(current.position, next.position);
+
+                    // lerp next to the appropriate distance away from the current joint
+                    float tval = _jointDistances[i] / tempDist;
+                    next.position = Vector3.LerpUnclamped(current.position, next.position, tval);
+                }
+            }
         }
 
         /**
          * Checks that each field of this object contains valid data
+         * @param printErr: Print out an error message if invalid
          */
-        private bool CheckValidity() {
+        private bool CheckValidity(bool printErr) {
             bool MISSING_END_EFFECTOR = endEffector == null;
             bool NON_DESCENDANT_EE = !(MISSING_END_EFFECTOR);
             
@@ -128,7 +178,7 @@ namespace ahanlindev
             }
 
             _isValid = !(MISSING_END_EFFECTOR || NON_DESCENDANT_EE);
-            if (!_isValid)
+            if (!_isValid && printErr)
             {
                 Debug.LogWarning("Invalid Kinematic Chain. " + 
                     (MISSING_END_EFFECTOR ? "- Missing End Effector" : "") +
@@ -163,16 +213,20 @@ namespace ahanlindev
          * MUST BE CALLED IN OnDrawGizmos or OnDrawGizmosSelected!
          */
         private void DrawChainGizmo() {
-            if (_isValid) {
-                Transform last = endEffector.transform;
-                Transform current = last;
-                while (current != _rootJoint.transform)
-                {
-                    current = last.parent.transform;
-                    Gizmos.color = Color.magenta;
-                    Gizmos.DrawLine(last.transform.position, current.transform.position);
-                    last = current;
-                    if (current == null) Debug.LogError("Null bone in kinematic chain");
+            if (_drawChain) {
+                if (_isValid) {
+                    Transform last = endEffector.transform;
+                    Transform current = last;
+                    while (current != _rootJoint.transform)
+                    {
+                        current = last.parent.transform;
+                        Gizmos.color = Color.magenta;
+                        Gizmos.DrawLine(last.transform.position, current.transform.position);
+                        last = current;
+                    }
+                } else {
+                    Debug.LogError("Cannot draw gizmos on this chain because it is not valid");
+                    _drawChain = false;
                 }
             }
         }
