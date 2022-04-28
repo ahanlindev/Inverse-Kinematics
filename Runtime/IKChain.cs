@@ -58,13 +58,13 @@ namespace ahanlindev
 
         private void Update() {
             if (!_iterateInFixedUpdate && _isValid) {
-                PerformFABRIK();
+                SolveChain();
             }    
         }
 
         private void FixedUpdate() {
             if (_iterateInFixedUpdate && _isValid) {
-                PerformFABRIK();
+                SolveChain();
             }
         }
 
@@ -73,11 +73,11 @@ namespace ahanlindev
         }
 
         /** 
-         * Performs the FABRIK algorithm to determine locations for each joint. 
+         * Performs the FABRIK algorithm to solve for locations for each joint. 
          * If the chain is invalid or there is no target, returns immediately.
          * This method is heavily based upon the paper cited in the README.
          */
-        private void PerformFABRIK() {
+        private void SolveChain() {
             // Get distance from root and make sure its reachable with sum of joint distances
             if (target == null) { return; }
             float targetDist = Vector3.Distance(_rootJoint.position, target.position);
