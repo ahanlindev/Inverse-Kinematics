@@ -13,6 +13,10 @@ namespace ahanlindev
         [Tooltip("Object targeted by the end effector")]
         public Transform target; // TODO public or serialized?
 
+        [Tooltip("Object that joints on the chain lean towards."+
+        "WARNING: If this chain has more than one joint between the base and end effector, instability may occur")]
+        public Transform poleTarget; // TODO public or serialized?
+
         [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
         [SerializeField] private bool _drawChain;
 
@@ -22,7 +26,7 @@ namespace ahanlindev
         public float tolerance = 0.01f;
 
         [Tooltip("Maximum number of iterations of FABRIK before finishing.")]
-        [SerializeField] private int _maxIterations = 3;
+        [SerializeField] private int _maxIterations = 10;
         [Tooltip("If true, joint positions will be updated in FixedUpdate. If false, they will be updated in Update")]
         [SerializeField] private bool _iterateInFixedUpdate = true;
 
@@ -93,6 +97,9 @@ namespace ahanlindev
             } else {
                 HandleReachableTarget();
             }
+            if (poleTarget != null) {
+                HandlePoleConstraint();
+            }
         }   
 
         /**
@@ -157,6 +164,38 @@ namespace ahanlindev
             }
         }
 
+        /**
+         * Adjusts each joint in the chain so that it bends towards the pole target. This makes animation more consistent
+         */
+        private void HandlePoleConstraint() {
+            // loop condition here only respects pole if there are three or more joints
+            for(int i = 0; i < _jointDistances.Count - 1; i++) {
+                Transform prev = _jointTransforms[i];
+                Transform current = _jointTransforms[i+1];
+                Transform next = _jointTransforms[i+2];
+
+                // Project the pole target onto the plane that is orthogonal to the axis
+                // formed by prev and next, and intersects current
+                Vector3 norm = (next.position - prev.position).normalized;
+                Vector3 vecToTgt = poleTarget.position - current.position;
+                Vector3 projectedTgt = current.position + Vector3.ProjectOnPlane(vecToTgt, norm);
+                
+                // project prev onto the plane to get the center of the circle that current can 
+                // theoretically rotate around
+                Vector3 vecToPrev = prev.position - current.position;
+                Vector3 circleOrigin = current.position + Vector3.ProjectOnPlane(vecToPrev, norm);
+
+                // Get ratio of moveable radius to distance from tgt
+                float radius = Vector3.Distance(circleOrigin, current.position);
+                float poleDist = Vector3.Distance(circleOrigin, projectedTgt);
+                float tVal = radius/poleDist;
+
+                // Update current position to be most reasonably close to the pole
+                Vector3 poleOrientedPos = Vector3.LerpUnclamped(circleOrigin, projectedTgt, tVal);
+                current.position = poleOrientedPos;
+            }
+        }
+        // TODO take starting position, ending position, quat between them, and rotate each joint transform by that quat
         /**
          * Checks that each field of this object contains valid data
          * @param printErr: Print out an error message if invalid
