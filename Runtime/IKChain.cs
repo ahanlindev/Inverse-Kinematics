@@ -34,14 +34,20 @@ namespace ahanlindev
         // Transform of this GameObject
         [HideInInspector] private Transform _rootJoint; 
 
-        // index 0 is the position of the root
+        // index 0 is the position of the root. Length is # of joints
         [HideInInspector] private List<Transform> _jointTransforms; 
 
-        // index 0 is distance between root and its child in the chain. Updated in FABRIK TODO use local distance from origin?
+        // index 0 is distance between root and its child in the chain. Length is # of joints - 1
         [HideInInspector] private List<float> _jointDistances;
-
-        // TODO: make list of IKJoints representing constraints. Null if none exists
         
+        // Direction to the next joint before new positions are calculated. Length is # of joints - 1
+        [HideInInspector] private List<Vector3> _jointStartDirections;
+
+        // Initial rotations of each joint before position is solved. Length is # of joints
+        [HideInInspector] private List<Quaternion> _jointStartRotations;
+        // TODO store target orientation
+        // TODO store root rotation separately?
+                
         // marked false if anything is broken
         [HideInInspector] private bool _isValid = false; 
     
@@ -82,15 +88,15 @@ namespace ahanlindev
          * This method is heavily based upon the paper cited in the README.
          */
         private void SolveChain() {
-            // Get distance from root and make sure its reachable with sum of joint distances
             if (target == null) { return; }
+
+            // Get distance from root and make sure its reachable with sum of joint distances
             float targetDist = Vector3.Distance(_rootJoint.position, target.position);
             float reachableDist = 0;
-            _jointDistances = new List<float>(); // clear list of distances and rebuild it
-            for(int i = 0; i < _jointTransforms.Count - 1; i++) {
-                float dist = Vector3.Distance(_jointTransforms[i].position, _jointTransforms[i+1].position);
-                _jointDistances.Add(dist);
-                reachableDist += dist; 
+            
+            UpdateLists();
+            foreach(float dist in _jointDistances) {
+                reachableDist += dist;
             }
             if (reachableDist < targetDist) {
                 HandleUnreachableTarget();
@@ -101,7 +107,22 @@ namespace ahanlindev
                 HandlePoleConstraint();
             }
         }   
+        /**
+         * Updates the lists of information necessary for each frame
+         */
+        private void UpdateLists() {
+            _jointDistances = new List<float>(); // clear lists and rebuild them
+            for(int i = 0; i < _jointTransforms.Count - 1; i++) {
+                Transform current = _jointTransforms[i];
+                Transform next = _jointTransforms[i+1];
 
+                float dist = Vector3.Distance(current.position, next.position);
+                _jointDistances.Add(dist);
+                Vector3 dir = (next.position - current.position).normalized;
+                _jointStartDirections.Add(dir);
+                _jointStartRotations.Add(current.rotation);
+            }
+        }
         /**
          * Set each joint at the appropriate distance along the line between the root and 
          * the target
@@ -169,11 +190,10 @@ namespace ahanlindev
          */
         private void HandlePoleConstraint() {
             // loop condition here only respects pole if there are three or more joints
-            for(int i = 0; i < _jointDistances.Count - 1; i++) {
-                Transform prev = _jointTransforms[i];
-                Transform current = _jointTransforms[i+1];
-                Transform next = _jointTransforms[i+2];
-
+            for(int i = 1; i < _jointTransforms.Count - 1; i++) {
+                Transform prev = _jointTransforms[i-1];
+                Transform current = _jointTransforms[i];
+                Transform next = _jointTransforms[i+1];
                 // Project the pole target onto the plane that is orthogonal to the axis
                 // formed by prev and next, and intersects current
                 Vector3 norm = (next.position - prev.position).normalized;
@@ -194,6 +214,7 @@ namespace ahanlindev
                 Vector3 poleOrientedPos = Vector3.LerpUnclamped(circleOrigin, projectedTgt, tVal);
                 current.position = poleOrientedPos;
             }
+            
         }
         // TODO take starting position, ending position, quat between them, and rotate each joint transform by that quat
         /**
