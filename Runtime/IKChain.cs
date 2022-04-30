@@ -194,6 +194,10 @@ namespace ahanlindev
                 Transform prev = _jointTransforms[i-1];
                 Transform current = _jointTransforms[i];
                 Transform next = _jointTransforms[i+1];
+
+                // save position of next, since changing position of current will affect this as well
+                Vector3 nextInitialPos = next.position;
+
                 // Project the pole target onto the plane that is orthogonal to the axis
                 // formed by prev and next, and intersects current
                 Vector3 norm = (next.position - prev.position).normalized;
@@ -213,6 +217,7 @@ namespace ahanlindev
                 // Update current position to be most reasonably close to the pole
                 Vector3 poleOrientedPos = Vector3.LerpUnclamped(circleOrigin, projectedTgt, tVal);
                 current.position = poleOrientedPos;
+                next.position = nextInitialPos;
             }
             
         }
