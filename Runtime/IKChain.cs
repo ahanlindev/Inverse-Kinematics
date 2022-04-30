@@ -13,9 +13,13 @@ namespace ahanlindev
         [Tooltip("Object targeted by the end effector")]
         public Transform target; // TODO public or serialized?
 
-        [Tooltip("Object that joints on the chain lean towards."+
-        "WARNING: If this chain has more than one joint between the base and end effector, instability may occur")]
+        [Tooltip("Object that joints on the chain lean towards." +
+        "\nNote that in chains with more than 3 total joints," +
+        " this can result in odd configurations without caution")]
         public Transform poleTarget; // TODO public or serialized?
+
+        [Tooltip("Omnidirectional restriction on how far each joint can bend, in degrees")]
+        [Range(0,360)]public float maxBendAngle = 360f;
 
         [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
         [SerializeField] private bool _drawChain;
@@ -48,7 +52,10 @@ namespace ahanlindev
         // TODO store target orientation
         // TODO store root rotation separately?
                 
-        // marked false if anything is broken
+        // position and rotation of target on last frame. If these are the same between frames, do not solve
+        [HideInInspector] private Vector3 _previousTargetPosition;
+        [HideInInspector] private Quaternion _previousTargetRotation;
+
         [HideInInspector] private bool _isValid = false; 
     
         private void Awake() {
@@ -68,13 +75,17 @@ namespace ahanlindev
 
         private void Update() {
             if (!_iterateInFixedUpdate && _isValid) {
-                SolveChain();
+                if (!(_previousTargetPosition == target.position && _previousTargetRotation == target.rotation)) {
+                    SolveChain();
+                }
             }    
         }
 
         private void FixedUpdate() {
             if (_iterateInFixedUpdate && _isValid) {
-                SolveChain();
+                if (!(_previousTargetPosition == target.position && _previousTargetRotation == target.rotation)) {
+                    SolveChain();
+                }
             }
         }
 
@@ -98,20 +109,26 @@ namespace ahanlindev
             foreach(float dist in _jointDistances) {
                 reachableDist += dist;
             }
+            
             if (reachableDist < targetDist) {
                 HandleUnreachableTarget();
             } else {
                 HandleReachableTarget();
             }
+
             if (poleTarget != null) {
                 HandlePoleConstraint();
             }
+            _previousTargetPosition = target.position;
+            _previousTargetRotation = target.rotation;
         }   
         /**
          * Updates the lists of information necessary for each frame
          */
         private void UpdateLists() {
             _jointDistances = new List<float>(); // clear lists and rebuild them
+            _jointStartDirections = new List<Vector3>();
+            _jointStartRotations = new List<Quaternion>();
             for(int i = 0; i < _jointTransforms.Count - 1; i++) {
                 Transform current = _jointTransforms[i];
                 Transform next = _jointTransforms[i+1];
@@ -128,6 +145,7 @@ namespace ahanlindev
          * the target
          */
         private void HandleUnreachableTarget() {
+            //TODO I should probably impose the joint restraint on the root here 
             for(int i = 0; i < _jointDistances.Count; i++) {
                 Transform parent = _jointTransforms[i];
                 Transform child = _jointTransforms[i+1];
@@ -157,14 +175,19 @@ namespace ahanlindev
                 for (int i = _jointDistances.Count - 1; i >= 0; i--) {
                     Transform current = _jointTransforms[i];
                     Transform next = _jointTransforms[i+1];
-
+                    
+                    // Keep this initial value because moving current also moves its children
+                    Vector3 savedNextPos = next.position;
+                    
                     // get the distance between current and next at this moment
                     float tempDist = Vector3.Distance(next.position, current.position);
 
                     // lerp current to the appropriate distance away from the next joint
                     float tval = _jointDistances[i] / tempDist;
+                    Vector3 newPos = Vector3.LerpUnclamped(next.position, current.position, tval);
 
-                    current.position = Vector3.LerpUnclamped(next.position, current.position, tval);
+                    current.position = newPos;
+                    next.position = savedNextPos;
                 }
 
                 // BACKWARD
@@ -180,7 +203,25 @@ namespace ahanlindev
 
                     // lerp next to the appropriate distance away from the current joint
                     float tval = _jointDistances[i] / tempDist;
-                    next.position = Vector3.LerpUnclamped(current.position, next.position, tval);
+                    Vector3 newPos = Vector3.LerpUnclamped(current.position, next.position, tval);
+
+                    // If applicable and possible, check restraints on bending
+                    if (i > 0) {
+                        Transform prev = _jointTransforms[i-1];
+                        // get vectors on lines formed by adjacent joints TODO try negated vecs for this?
+                        Vector3 knownDir = (current.position - prev.position).normalized;
+                        Vector3 newDir = (newPos - current.position).normalized;
+
+                        // check that angle between directions is within maxBendAngle 
+                        float bendAngle = Vector3.Angle(knownDir, newDir); 
+                        if (bendAngle > maxBendAngle) {
+                            float difference = bendAngle - maxBendAngle;
+                            Vector3 fixedDir = Vector3.RotateTowards(newDir, knownDir, Mathf.Deg2Rad * difference, 0f);
+                            newPos = current.position + (_jointDistances[i] * fixedDir);
+                        }
+                    }
+
+                    next.position = newPos;
                 }
             }
         }
