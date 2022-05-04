@@ -18,8 +18,9 @@ namespace ahanlindev
         " this can result in odd configurations without caution")]
         public Transform poleTarget; // TODO public or serialized?
 
-        [Tooltip("Omnidirectional restriction on how far each joint can bend, in degrees")]
-        [Range(0,360)]public float maxBendAngle = 360f;
+        [Tooltip("Omnidirectional restriction on how far each joint can bend, in degrees. "+
+        "WARNING: May not be respected if a pole target exists for this chain")]
+        [Range(0,180)]public float maxBendAngle = 180f;
 
         [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
         [SerializeField] private bool _drawChain;
