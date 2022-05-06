@@ -76,12 +76,23 @@ namespace ahanlindev
 
         private void Update() {
             if (!_iterateInFixedUpdate && _isValid) {
+                // TODO this condition could cause pretty bad slowdown if the parent rotates a lot
+                if(_rootJoint.parent != null && _rootJoint.parent.rotation != _rootStartRotation) {
+                    // CheckValidity(true);
+                    // Init();
+                    _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
+                }
                 SolveChain();
             }    
         }
 
         private void FixedUpdate() {
             if (_iterateInFixedUpdate && _isValid) {
+                if(_rootJoint.parent != null && _rootJoint.parent.rotation != _rootStartRotation) {
+                    // CheckValidity(true);
+                    // Init();
+                    _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
+                }
                 SolveChain();
             }
         }
@@ -101,12 +112,15 @@ namespace ahanlindev
             _jointStartDirections = new List<Vector3>();
             _jointStartRotations = new List<Quaternion>();
 
+            _targetStartRotation = target.rotation;
+            _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
+
             Transform current = endEffector;
             Transform prev = endEffector;
             // traverse up hierarchy to the root of the chain
             while(current != null && !current.Equals(_rootJoint.parent)) {
                 _jointTransforms.Add(current);
-                _jointStartRotations.Add(current.rotation);
+                _jointStartRotations.Add(current.rotation * Quaternion.Inverse(_rootStartRotation));
                 if (current.Equals(endEffector)) {
                     _jointStartDirections.Add((target.position - current.position).normalized);
                 } else {
@@ -120,9 +134,6 @@ namespace ahanlindev
             _jointTransforms.Reverse();
             _jointStartDirections.Reverse();
             _jointStartRotations.Reverse();
-
-            _targetStartRotation = target.rotation;
-            _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
         }
 
         /** 
@@ -311,8 +322,8 @@ namespace ahanlindev
                 Vector3 newDir = (next - current).normalized;
 
                 Quaternion newRot = Quaternion.FromToRotation(oldDir, newDir);
-
-                _jointTransforms[i].rotation = newRot * _jointStartRotations[i];
+    
+                _jointTransforms[i].rotation = newRot * _rootStartRotation * _jointStartRotations[i];
             }
             // THIS IS AN ASSUMPTION. TODO find a more graceful way
             endEffector.rotation = _jointTransforms[_jointTransforms.Count - 1].rotation;
