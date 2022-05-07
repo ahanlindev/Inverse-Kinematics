@@ -44,6 +44,7 @@ namespace ahanlindev
         }
 
         private void Init() {
+            #if UNITY_EDITOR
             if (transform.parent != null) {
                 initialParentRot = transform.parent.rotation;
                 initialParentDir = (transform.position - transform.parent.position).normalized;
@@ -51,6 +52,7 @@ namespace ahanlindev
                 initialParentRot = Quaternion.identity;
                 initialParentDir = Vector3.zero;
             }
+            #endif
         }
         /**
          * Returns the direction vector that marks the center of the mobility cone
