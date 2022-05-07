@@ -8,15 +8,15 @@ namespace ahanlindev
     {
         // Fields visible in Inspector
         [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THIS GAMEOBJECT")]
-        public Transform endEffector; // TODO public or serialized?
+        public Transform endEffector;
 
         [Tooltip("Object targeted by the end effector")]
-        public Transform target; // TODO public or serialized?
+        public Transform target;
 
         [Tooltip("Object that joints on the chain lean towards." +
         "\nNote that in chains with more than 3 total joints," +
         " this can result in odd configurations without caution")]
-        public Transform poleTarget; // TODO public or serialized?
+        public Transform poleTarget;
 
         [Tooltip("Omnidirectional restriction on how far each joint can bend, in degrees. "+
         "If a joint along the chain has an IKJoint component, its constraints are used instead" +
@@ -54,9 +54,6 @@ namespace ahanlindev
 
         // Info about joint-specific constraints
         private List<IKJoint> jointConstraintComponents;
-
-        // TODO store target orientation
-        // TODO store root rotation separately?
                 
         // position and rotation of target on last frame. If these are the same between frames, do not solve
         private Quaternion targetStartRotation;
@@ -355,8 +352,7 @@ namespace ahanlindev
         }
 
         /**
-         * Adjusts each joint in the chain so that it bends towards the pole target. This makes animation more consistent
-          * TODO Should I just use ee and root as the axis?
+         * Adjusts each joint in the chain so that it bends towards the pole target. 
          */
         private void HandlePoleConstraint() {
             // loop condition here only respects pole if there are three or more joints
