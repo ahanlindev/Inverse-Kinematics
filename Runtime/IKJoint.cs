@@ -6,16 +6,24 @@ namespace ahanlindev
 {
     public class IKJoint : MonoBehaviour
     {
-        public Vector3 direction;
-        public float maxAngle;
+        [Tooltip("The direction that denotes the orientation of the constraint cone")]
+        public Vector3 direction = Vector3.right;
+
+        [Tooltip("The maximum angle away from the direction that this joint is allowed to face")]
+        public float maxAngle = 45;
         
         #if UNITY_EDITOR
             private Quaternion initialParentRot; 
             private Vector3 initialParentDir;
 
             [Header("Debug UI options")]
+            [Tooltip("Number of lines that compose the debug cone gizmo")]
             [SerializeField] private int numLinesOnCone = 50;
-            [SerializeField] private float lengthOfCone = 1.5f;
+
+            [Tooltip("Slant height of the debug cone gizzmo")]
+            [SerializeField] private float slantHeightOfCone = 1.5f;
+
+            [Tooltip("Color of the debug cone gizmo")]
             [SerializeField] private Color gizmoColor = new Color(.9f, .7f, .3f);
         #endif
 
@@ -63,12 +71,12 @@ namespace ahanlindev
 
             Vector3 currentDirection;
             if (transform.parent != null) {
-                currentDirection = (transform.parent.rotation * Quaternion.Inverse(initialParentRot)) * direction;
+                currentDirection = (transform.parent.rotation * Quaternion.Inverse(initialParentRot)) * direction.normalized;
             } else {
-                currentDirection = direction;
+                currentDirection = direction.normalized;
             }
             Vector3 start = transform.position;
-            Vector3 end = start + (currentDirection * lengthOfCone);
+            Vector3 end = start + (currentDirection * slantHeightOfCone);
  
             Vector3 ortho = Vector3.Cross(currentDirection, Vector3.right);
             if (ortho == Vector3.zero) ortho = Vector3.Cross(currentDirection, Vector3.up);
@@ -81,10 +89,10 @@ namespace ahanlindev
             
             // Create a pseudo-cone of lines
             for(int i = 0; i < numLinesOnCone; i++) {
-                Vector3 prevEnd = (start + angledDir * lengthOfCone);
+                Vector3 prevEnd = (start + angledDir * slantHeightOfCone);
                 angledDir = Quaternion.AngleAxis(360f / numLinesOnCone, currentDirection) * angledDir;
                 angledDir = angledDir.normalized;
-                Vector3 currEnd = (start + angledDir * lengthOfCone);
+                Vector3 currEnd = (start + angledDir * slantHeightOfCone);
 
                 Gizmos.DrawLine(start, prevEnd);
                 Gizmos.DrawLine(prevEnd, currEnd);
