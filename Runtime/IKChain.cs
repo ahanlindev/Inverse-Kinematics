@@ -19,7 +19,8 @@ namespace ahanlindev
         public Transform poleTarget; // TODO public or serialized?
 
         [Tooltip("Omnidirectional restriction on how far each joint can bend, in degrees. "+
-        "WARNING: May not be respected if a pole target exists for this chain")]
+        "If a joint along the chain has an IKJoint component, its constraints are used instead" +
+        "WARNING: May not be respected if a pole target exists for this chain")] // TODO can I fix that?
         [Range(0,180)]public float maxBendAngle = 180f;
 
         [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
@@ -42,13 +43,17 @@ namespace ahanlindev
         // index 0 is the position of the root. Length is # of joints
         private List<Transform> _jointTransforms; 
         private List<Vector3> _jointPositions; 
-
+    
         // index 0 is distance between root and its child in the chain. Length is # of joints - 1
         private List<float> _jointDistances;
-        
+        private float _reachableDist;
+
         // Info about joints before new positions are calculated. Used for rotation. Length is # of joints
         private List<Vector3> _jointStartDirections;
         private List<Quaternion> _jointStartRotations;
+
+        // Info about joint-specific constraints
+        private List<IKJoint> _jointConstraintComponents;
 
         // TODO store target orientation
         // TODO store root rotation separately?
@@ -76,10 +81,7 @@ namespace ahanlindev
 
         private void Update() {
             if (!_iterateInFixedUpdate && _isValid) {
-                // TODO this condition could cause pretty bad slowdown if the parent rotates a lot
-                if(_rootJoint.parent != null && _rootJoint.parent.rotation != _rootStartRotation) {
-                    // CheckValidity(true);
-                    // Init();
+                if(_rootJoint.parent != null && _rootJoint.parent.rotation != _rootStartRotation) { // TODO do I need more here
                     _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
                 }
                 SolveChain();
@@ -88,9 +90,7 @@ namespace ahanlindev
 
         private void FixedUpdate() {
             if (_iterateInFixedUpdate && _isValid) {
-                if(_rootJoint.parent != null && _rootJoint.parent.rotation != _rootStartRotation) {
-                    // CheckValidity(true);
-                    // Init();
+                if(_rootJoint.parent != null && _rootJoint.parent.rotation != _rootStartRotation) { // TODO do I need more here
                     _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
                 }
                 SolveChain();
@@ -98,7 +98,9 @@ namespace ahanlindev
         }
 
         private void OnDrawGizmos() {
-            DrawChainGizmo();
+            #if UNITY_EDITOR
+                DrawChainGizmo();
+            #endif
         }
 
          /**
@@ -111,6 +113,7 @@ namespace ahanlindev
             _jointTransforms = new List<Transform>();
             _jointStartDirections = new List<Vector3>();
             _jointStartRotations = new List<Quaternion>();
+            _jointConstraintComponents = new List<IKJoint>();
 
             _targetStartRotation = target.rotation;
             _rootStartRotation = (_rootJoint.parent != null) ? _rootJoint.parent.rotation : Quaternion.identity;
@@ -120,20 +123,26 @@ namespace ahanlindev
             // traverse up hierarchy to the root of the chain
             while(current != null && !current.Equals(_rootJoint.parent)) {
                 _jointTransforms.Add(current);
-                _jointStartRotations.Add(current.rotation * Quaternion.Inverse(_rootStartRotation));
+                
+                _jointStartRotations.Add(current.rotation);
+                
                 if (current.Equals(endEffector)) {
+                    // TODO incorporate rotation relative to parent?
                     _jointStartDirections.Add((target.position - current.position).normalized);
                 } else {
                     _jointStartDirections.Add((prev.position - current.position).normalized);
                 }
 
+                _jointConstraintComponents.Add(current.GetComponent<IKJoint>());
+
                 prev = current;
                 current = current.parent;
             }
-            // loop puts end effector at index 0. Algorithm is easier if root is at 0
+            // loop puts end effector at index 0. Algorithm is easier if root is at 0 TODO this is inefficient
             _jointTransforms.Reverse();
-            _jointStartDirections.Reverse();
             _jointStartRotations.Reverse();
+            _jointStartDirections.Reverse();
+            _jointConstraintComponents.Reverse();
         }
 
         /** 
@@ -146,23 +155,23 @@ namespace ahanlindev
 
             // Get distance from root and make sure its reachable with sum of joint distances
             float targetDist = Vector3.Distance(_rootJoint.position, target.position);
-            float reachableDist = 0;
             
+            // Update data necessary for performing the algorithm
             UpdateLists();
-            foreach(float dist in _jointDistances) {
-                reachableDist += dist;
-            }
             
-            if (reachableDist < targetDist) {
+            // calculation is faster if unreachable, so check for it first
+            if (_reachableDist < targetDist) {
                 HandleUnreachableTarget();
             } else {
                 HandleReachableTarget();
             }
 
+            // Apply favor towards pole target if it exists
             if (poleTarget != null) {
                 HandlePoleConstraint(); 
             }
 
+            // Update joint transforms with the calculated positions and rotations
             SetPositionsAndRotations();
         }   
         
@@ -181,6 +190,7 @@ namespace ahanlindev
 
                     float dist = Vector3.Distance(current.position, next.position);
                     _jointDistances.Add(dist);
+                    _reachableDist += dist;
                 }
             }
         }
@@ -190,7 +200,6 @@ namespace ahanlindev
          * NOTE: as of now this is unused, because I have not found a good way to get 
          */
         private void HandleUnreachableTarget() {
-            //TODO I should probably impose the joint restraint on the root here 
             for(int i = 0; i < _jointDistances.Count; i++) {
                 Vector3 current = _jointPositions[i];
 
@@ -201,15 +210,16 @@ namespace ahanlindev
                 // lerp position of (i+1)th joint based on distance
                 Vector3 newPos = Vector3.Lerp(current, target.position, tval);
 
-                // knownDir is axis formed by joints earlier in the chain. Special case when i = 0
-                Vector3 knownDir = (i > 0) ? (current - _jointPositions[i-1]).normalized : _jointStartDirections[0];
+                Vector3 constraintDir = GetJointConstraintDirection(i);
+                float maxAngle = (_jointConstraintComponents[i] == null) ? maxBendAngle : _jointConstraintComponents[i].maxAngle;
+
                 Vector3 newDir = (newPos - current).normalized;
 
                 // check that angle between directions is within maxBendAngle 
-                float bendAngle = Vector3.Angle(knownDir, newDir); 
-                if (bendAngle > maxBendAngle) {
-                    float difference = bendAngle - maxBendAngle;
-                    Vector3 fixedDir = Vector3.RotateTowards(newDir, knownDir, Mathf.Deg2Rad * difference, 0f);
+                float bendAngle = Vector3.Angle(constraintDir, newDir); 
+                if (bendAngle > maxAngle) {
+                    float difference = bendAngle - maxAngle;
+                    Vector3 fixedDir = Vector3.RotateTowards(newDir, constraintDir, Mathf.Deg2Rad * difference, 0f);
                     newPos = current + (_jointDistances[i] * fixedDir);
                 }
 
@@ -222,60 +232,125 @@ namespace ahanlindev
          * it either reaches the threshold or the maximum allowed iterations.
          */
         private void HandleReachableTarget() {
-            // save original root position
-            Vector3 startingRootPos = _rootJoint.position;
             // If end effector isn't on target, iterate the algorithm
             int iteration = 0;
             while (Vector3.Distance(endEffector.position, target.position) > tolerance && iteration++ < _maxIterations) {
-                // FORWARD
-                // Set end effector position to target
-                _jointPositions[_jointPositions.Count -1] = target.position;
-                // iterate down the chain and set each position to a reasonable location
-                for (int i = _jointDistances.Count - 1; i >= 0; i--) {
-                    Vector3 current = _jointPositions[i];
-                    Vector3 next = _jointPositions[i + 1];
-                    
-                    // get the distance between current and next at this moment
-                    float tempDist = Vector3.Distance(next, current);
+                HandleForward();
+                HandleBackward();
+            }
+        }
 
-                    // lerp current to the appropriate distance away from the next joint
-                    float tval = _jointDistances[i] / tempDist;
-                    Vector3 newPos = Vector3.LerpUnclamped(next, current, tval);
+        /** 
+         * Handles the forward portion of the FABRIK algorithm
+         */
+        private void HandleForward() {
+            // Set end effector position to target
+            _jointPositions[_jointPositions.Count -1] = target.position;
+            // iterate down the chain and set each position to a reasonable location
+            for (int i = _jointDistances.Count - 1; i >= 0; i--) {
+                Vector3 current = _jointPositions[i];
+                Vector3 next = _jointPositions[i + 1];
+                
+                // get the distance between current and next at this moment
+                float tempDist = Vector3.Distance(next, current);
 
-                    _jointPositions[i] = newPos;
+                // lerp current to the appropriate distance away from the next joint
+                float tval = _jointDistances[i] / tempDist;
+                Vector3 newPos = Vector3.LerpUnclamped(next, current, tval);
+
+                _jointPositions[i] = newPos;
+            }
+        }
+
+        /**
+         * Handles the backward portion of the FABRIK algorithm
+         */
+        private void HandleBackward() {
+            // Set root position to start (transform positions only updated at end of algo)
+            _jointPositions[0] = _rootJoint.position;
+            // iterate up the chain and set each position to a reasonable location
+            for (int i = 0; i < _jointDistances.Count; i++) {
+                Vector3 current = _jointPositions[i];
+                Vector3 next = _jointPositions[i + 1];
+
+                // get the distance between current and next at this moment
+                float tempDist = Vector3.Distance(current, next);
+
+                // lerp next to the appropriate distance away from the current joint
+                float tval = _jointDistances[i] / tempDist;
+                Vector3 newPos = Vector3.LerpUnclamped(current, next, tval);
+                Vector3 newDir = (newPos - current).normalized;
+                
+                // Account for constraints. If within constraints, nothing will change
+                newDir = ConstrainDirection(newDir, i);
+                newPos = current + (_jointDistances[i] * newDir);
+                // Check restraints on bending
+                // get reference direction based on line formed by previous "bone". Special case when i=0
+                // Vector3 constraintDir = GetJointConstraintDirection(i);
+                // float maxAngle = (jointConstraintComponents[i] == null) ? maxBendAngle : jointConstraintComponents[i].maxAngle;
+
+                // Vector3 newDir = (newPos - current).normalized;
+
+                // // check that angle between directions is within maxAngle 
+                // float bendAngle = Vector3.Angle(constraintDir, newDir); 
+                // if (bendAngle > maxAngle) {
+                //     float difference = bendAngle - maxAngle;
+                //     Vector3 fixedDir = Vector3.RotateTowards(newDir, constraintDir, Mathf.Deg2Rad * difference, 0f);
+                //     newPos = current + (jointDistances[i] * fixedDir);
+                // }
+                
+                _jointPositions[i + 1] = newPos;
+            }
+        }
+
+        /**
+         * Returns the normalized vector that represents the nearest direction to dir that is 
+         * compatible with the constraints of the joint at the specified index
+         */
+        private Vector3 ConstrainDirection(Vector3 dir, int index) {
+            dir = dir.normalized; // ensures that dir is normalized
+            Vector3 constraintDir = GetJointConstraintDirection(index);
+            float maxAngle = maxBendAngle; 
+
+            // Max angle is either constraint-dependent, or defaults to the chain's limit
+            IKJoint constraint = _jointConstraintComponents[index]; 
+            if (constraint != null && constraint.isActiveAndEnabled) {
+                maxAngle = constraint.maxAngle;  
+            } 
+            
+            // Ensure that the dir is within maxAngle degrees from constraintDir
+            float bendAngle = Vector3.Angle(constraintDir, dir);
+            if (bendAngle > maxAngle) {
+                float diff = bendAngle - maxAngle;
+                return Vector3.RotateTowards(dir, constraintDir, Mathf.Deg2Rad * diff, 0f);
+            }
+            else return dir;
+        }
+
+        /**
+         * Returns the normalized vector that marks the center of the cone of angular restraint around
+         * the joint at the specified index of jointTransforms.
+         */
+        private Vector3 GetJointConstraintDirection(int index) {
+            IKJoint constraint = _jointConstraintComponents[index]; 
+            if (constraint != null && constraint.isActiveAndEnabled) {
+                // If an IKJoint exists, use its values and update them to match current state of the chain
+                Quaternion rotFromInitial = Quaternion.identity;
+                if (index > 0) {
+                    // get direction of the previous joint in the chain
+                    Vector3 currentParentDir = (_jointPositions[index] - _jointPositions[index - 1]).normalized;
+                    // get rotation from initial parent direction to current parent direction 
+                    rotFromInitial = Quaternion.FromToRotation(_jointStartDirections[index - 1], currentParentDir);
+                } else {
+                    // TODO Figure out how to handle root case if parented
                 }
-
-                // BACKWARD
-                // Set root position to start
-                _jointPositions[0] = startingRootPos;
-                // iterate up the chain and set each position to a reasonable location
-                for (int i = 0; i < _jointDistances.Count; i++) {
-                    Vector3 current = _jointPositions[i];
-                    Vector3 next = _jointPositions[i + 1];
-
-                    // get the distance between current and next at this moment
-                    float tempDist = Vector3.Distance(current, next);
-
-                    // lerp next to the appropriate distance away from the current joint
-                    float tval = _jointDistances[i] / tempDist;
-                    Vector3 newPos = Vector3.LerpUnclamped(current, next, tval);
-
-                    // Check restraints on bending
-                    // get vectors on lines formed by adjacent joints.
-                    // knownDir is axis formed by joints earlier in the chain. Special case when i = 0
-                    Vector3 knownDir = (i > 0) ? (current - _jointPositions[i-1]).normalized : _jointStartDirections[0];
-                    Vector3 newDir = (newPos - current).normalized;
-
-                    // check that angle between directions is within maxBendAngle 
-                    float bendAngle = Vector3.Angle(knownDir, newDir); 
-                    if (bendAngle > maxBendAngle) {
-                        float difference = bendAngle - maxBendAngle;
-                        Vector3 fixedDir = Vector3.RotateTowards(newDir, knownDir, Mathf.Deg2Rad * difference, 0f);
-                        newPos = current + (_jointDistances[i] * fixedDir);
-                    }
-
-                    _jointPositions[i + 1] = newPos;
-                }
+                return rotFromInitial * constraint.GetDirection(); 
+            } else if (index > 0) {
+                // If there is no IKJoint, assume the constraint is centered on the same direction as the previous "bone"
+                return (_jointPositions[index] - _jointPositions[index - 1]).normalized;
+            } else {
+                // If there is no previous bone, use the starting direction TODO adjust to work with real-time dir if root is parented
+                return _jointStartDirections[0];
             }
         }
 
@@ -323,7 +398,7 @@ namespace ahanlindev
 
                 Quaternion newRot = Quaternion.FromToRotation(oldDir, newDir);
     
-                _jointTransforms[i].rotation = newRot * _rootStartRotation * _jointStartRotations[i];
+                _jointTransforms[i].rotation = newRot * _jointStartRotations[i];
             }
             // THIS IS AN ASSUMPTION. TODO find a more graceful way
             endEffector.rotation = _jointTransforms[_jointTransforms.Count - 1].rotation;
@@ -364,8 +439,6 @@ namespace ahanlindev
             } 
             return _isValid;
         }
-        
-       
 
         /** 
          * Draws a magenta line between the joints of this kinematic chain
