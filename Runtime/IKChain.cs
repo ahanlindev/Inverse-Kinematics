@@ -249,7 +249,7 @@ namespace ahanlindev
                 Vector3 newDir = (newPos - child).normalized;
 
                 // Account for constraints. If within constraints, nothing will change.
-                newDir = ConstrainDirection(newDir, i, false);
+                newDir = ConstrainDirection(newDir, i+1, false);
                 newPos = child + (jointDistances[i] * newDir);
 
                 // Update position vector
@@ -369,7 +369,7 @@ namespace ahanlindev
                     // TODO Figure out how to handle root case if parented
                 }
                 constraintDir = rotFromInitial * -constraint.GetDirection(); // negate direction if starting from EE
-            } else if (index > 0) {
+            } else if (index < jointStartDirections.Count - 1) {
                 // If there is no IKJoint, assume the constraint is centered on the same direction as the previous "bone"
                 constraintDir = (jointPositions[index] - jointPositions[index + 1]).normalized;
             } else {
