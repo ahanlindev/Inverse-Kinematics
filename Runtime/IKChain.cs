@@ -295,10 +295,16 @@ namespace ahanlindev
          */
         private Vector3 ConstrainDirection(Vector3 dir, int index, bool startAtRoot) {
             dir = dir.normalized; // ensures that dir is normalized
-            Vector3 constraintDir = GetJointConstraintDirection(index, startAtRoot);
+            //Vector3 constraintDir; = GetJointConstraintDirection(index, startAtRoot);
+            Vector3 constraintDir;
+            if(startAtRoot) {
+                constraintDir = GetConstraintDirection(index);
+            } else {
+                constraintDir = GetInvertedConstraintDirection(index);
+            }
             float maxAngle = maxBendAngle; 
 
-            // Max angle is either constraint-dependent, or defaults to the chain's limit
+            // Max angle is either joint-dependent, or defaults to the chain's bend limit
             IKJoint constraint = jointConstraintComponents[index]; 
             if (constraint != null && constraint.isActiveAndEnabled) {
                 maxAngle = constraint.maxAngle;  
@@ -314,57 +320,62 @@ namespace ahanlindev
         }
 
         /**
-         * Returns the normalized vector that marks the center of the cone of angular restraint around
-         * the joint at the specified index of jointTransforms.
-         * @param index: Index of the relevant joint
-         * @param startAtRoot: If true, the direction considers established ancestor positions when calculating constraints
-         * If this is false, descendants will influence the constraint direction instead
+         * Returns the normalized vector that marks the center of the cone of angular constraint around
+         * the joint at the specified index. Assumes that ancestor joint positions are fixed and will be
+         * used to calculate this direction.
          */
-        private Vector3 GetJointConstraintDirection(int index, bool startAtRoot) {
+        private Vector3 GetConstraintDirection(int index) {
             Vector3 constraintDir;
             IKJoint constraint = jointConstraintComponents[index]; 
-            if (startAtRoot) {
-                if (constraint != null && constraint.isActiveAndEnabled) {
-                    // If an IKJoint exists, use its values and update them to match current state of the chain
-                    Quaternion rotFromInitial = Quaternion.identity;
-                    if (index > 0) {
-                        // get direction of the previous joint in the chain
-                        Vector3 currentParentDir = (jointPositions[index] - jointPositions[index - 1]).normalized;
-                        // get rotation from initial parent direction to current parent direction 
-                        rotFromInitial = Quaternion.FromToRotation(jointStartDirections[index - 1], currentParentDir);
-                    } else {
-                        // TODO Figure out how to handle root case if parented
-                    }
-                    constraintDir = rotFromInitial * constraint.GetDirection(); 
-                } else if (index > 0) {
-                    // If there is no IKJoint, assume the constraint is centered on the same direction as the previous "bone"
-                    constraintDir = (jointPositions[index] - jointPositions[index - 1]).normalized;
+            if (constraint != null && constraint.isActiveAndEnabled) {
+                // If an IKJoint exists, use its values and update them to match current state of the chain
+                Quaternion rotFromInitial = Quaternion.identity;
+                if (index > 0) {
+                    // get direction of the previous joint in the chain
+                    Vector3 currentParentDir = (jointPositions[index] - jointPositions[index - 1]).normalized;
+                    // get rotation from initial parent direction to current parent direction 
+                    rotFromInitial = Quaternion.FromToRotation(jointStartDirections[index - 1], currentParentDir);
                 } else {
-                    // If there is no previous bone, use the starting direction TODO adjust to work with real-time dir if root is parented
-                    constraintDir = jointStartDirections[0];
+                    // TODO Figure out how to handle root case if parented
                 }
+                constraintDir = rotFromInitial * constraint.GetDirection(); 
+            } else if (index > 0) {
+                // If there is no IKJoint, assume the constraint is centered on the same direction as the previous "bone"
+                constraintDir = (jointPositions[index] - jointPositions[index - 1]).normalized;
             } else {
-                if (constraint != null && constraint.isActiveAndEnabled) {
-                    // If an IKJoint exists, use its values and update them to match current state of the chain
-                    Quaternion rotFromInitial = Quaternion.identity;
-                    if (index < jointTransforms.Count - 1) {
-                        // get direction of the next joint in the chain
-                        Vector3 currentChildDir = (jointPositions[index] - jointPositions[index + 1]).normalized;
-                        // get rotation from inverted initial direction to current child direction 
-                        rotFromInitial = Quaternion.FromToRotation(-jointStartDirections[index], currentChildDir);
-                    } else {
-                        // TODO Figure out how to handle root case if parented
-                    }
-                    constraintDir = rotFromInitial * -constraint.GetDirection(); // negate direction if starting from EE
-                } else if (index > 0) {
-                    // If there is no IKJoint, assume the constraint is centered on the same direction as the previous "bone"
-                    constraintDir = (jointPositions[index] - jointPositions[index + 1]).normalized;
-                } else {
-                    // If there is no previous bone, use the starting direction TODO adjust to work with real-time dir if root is parented
-                    constraintDir = -jointStartDirections[jointStartDirections.Count - 1];
-                }
+                // If there is no previous bone, use the starting direction TODO adjust to work with real-time dir if root is parented
+                constraintDir = jointStartDirections[0];
             }
+            return constraintDir;
+        }
 
+        /**
+         * Returns the normalized vector that marks the center of the cone of angular constraint around
+         * the joint at the specified index. Assumes that descendant joints are fixed and may be used to
+         * calculate this direction.
+         */
+        private Vector3 GetInvertedConstraintDirection(int index) {
+            Vector3 constraintDir;
+            IKJoint constraint = jointConstraintComponents[index];
+            if (constraint != null && constraint.isActiveAndEnabled) {
+                // If an IKJoint exists, use its values and update them to match current state of the chain
+                Quaternion rotFromInitial = Quaternion.identity;
+                if (index < jointTransforms.Count - 1) {
+                    // get direction of the next joint in the chain
+                    Vector3 currentChildDir = (jointPositions[index] - jointPositions[index + 1]).normalized;
+                    // get rotation from inverted initial direction to current child direction 
+                    rotFromInitial = Quaternion.FromToRotation(-jointStartDirections[index], currentChildDir);
+                } else {
+                    // TODO Figure out how to handle root case if parented
+                }
+                constraintDir = rotFromInitial * -constraint.GetDirection(); // negate direction if starting from EE
+            } else if (index > 0) {
+                // If there is no IKJoint, assume the constraint is centered on the same direction as the previous "bone"
+                constraintDir = (jointPositions[index] - jointPositions[index + 1]).normalized;
+            } else {
+                // If there is no previous bone, use the starting direction TODO adjust to work with real-time dir if root is parented
+                constraintDir = -jointStartDirections[jointStartDirections.Count - 1];
+            }
             return constraintDir;
         }
 
@@ -422,7 +433,6 @@ namespace ahanlindev
             }
         }
 
-        // TODO take starting position, ending position, quat between them, and rotate each joint transform by that quat
         /**
          * Checks that each field of this object contains valid data
          * @param printErr: Print out an error message if invalid
