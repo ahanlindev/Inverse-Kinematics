@@ -2,7 +2,7 @@
 
 ## Overview
 
-This package offers modest inverse kinematics functionality based upon the Forward-and-Backward-Reaching Inverse Kinematics (FABRIK) algorithm. Further support has been added for joint-level rotational constraints.
+This package offers inverse kinematics functionality based upon the Forward-and-Backward-Reaching Inverse Kinematics (FABRIK) algorithm. Further support has been added for joint-level rotational constraints and pole target constraints.
 
 ## Package Contents
  - `IKChain` component class
@@ -15,7 +15,7 @@ This package offers modest inverse kinematics functionality based upon the Forwa
         - `Target`: A `Transform` that denotes the position that the algorithm will attempt to place the end-effector. Any transform within the same scene as the object bearing this component may be used as a target.
         - `Pole Target`: A `Transform` that acts as a "secondary target" that intermediate joints in the chain will favor towards 
         - `Max Bend Angle`: The number of degrees that a given joint in the chain is allowed to deviate from the orientation of the last joints preceding it. If a joint has an `IKJoint` component, this value is ignored for that joint.
-        - 
+
  - `IKJoint` component class
     - Container for joint restraints. At this time, the only type of joint supported is a conal region defined by a direction and an angle.
     - If any `GameObject`s that are between an `IKChain` and its end-effector carry an `IKJoint` component, whatever restraints are set in that joint are considered in the algorithm.  

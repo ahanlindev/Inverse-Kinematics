@@ -1,6 +1,6 @@
 {
     "name": "com.ahanlindev.ik",
-    "version": "0.1.0",
+    "version": "0.2.1",
     "description": "A modest inverse kinematics toolkit",
     "displayName": "IK Toolkit",
     "unity": "2021.3",
