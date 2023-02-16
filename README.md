@@ -2,7 +2,21 @@
 
 This is a small inverse kinematics package for Unity3D primarily based upon the Forward-and-Backward-Reaching Inverse Kinematics (FABRIK) algorithm. At this time is has support for pole targets and joint-level angular constraints on top of basic functionality.
 
-For instructions on usage, see the [documentation](/Documentation~/DOCUMENTATION.md).
+## Add this to a Unity project
+
+1. Open the Unity Package Manager for your desired project
+
+2. Hit the plus icon in the top left corner of the Unity Package Manager window
+
+3. The package manager provides two ways to add the IK Toolkit: From disk, or from Git URL.
+
+  * From Disk: Download this repo as a .zip file, extract it, and when prompted by the package manager, select the extracted directory as the package source.
+
+  * From Git URL: Type in the https or ssh URL provided by this repo into the package manager's search field.
+
+4. After this, a tab in the Package manager should have appeared, titled "Packages - ahanlindev", and underneath it should be "IK Toolkit x.x.x"
+
+For instructions on usage once added, see the [documentation](/Documentation~/DOCUMENTATION.md).
 
 ## Sources
 
