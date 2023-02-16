@@ -4,40 +4,62 @@ using UnityEngine;
 
 namespace ahanlindev
 {
+    /// <summary>Component to model a chain of joints that will have inverse kinematics applied. </summary>
     public class IKChain : MonoBehaviour
     {
-        // Fields visible in Inspector
+        // Fields visible in Inspector ------------------------------------
+
+        /// <summary>The end effector of the kinematic chain. MUST BE A DESCENDANT OF THIS GAMEOBJECT</summary>
         [Tooltip("The end effector of the kinematic chain. MUST BE A DESCENDANT OF THIS GAMEOBJECT")]
         public Transform endEffector;
 
+        /// <summary>Object targeted by end effector</summary>
         [Tooltip("Object targeted by the end effector")]
         public Transform target;
 
-        [Tooltip("Object that joints on the chain lean towards." +
+        /// <summary>
+        /// Object that intermediate joints on the chain will lean towards if possible.
+        /// Note that in chains with more than 3 total joints, 
+        /// this can result in odd configurations without caution
+        /// </summary>
+        [Tooltip("Object that intermediate joints on the chain lean towards if possible." +
         "\nNote that in chains with more than 3 total joints," +
         " this can result in odd configurations without caution")]
         public Transform poleTarget;
 
+        /// <summary>
+        /// Omnidirectional restriction on how far each joint can bend, in degrees. 
+        /// Overriden if a joint has an IKJoint component.
+        /// WARNING: May not be respected if a pole target exists for this chain
+        /// </summary>
         [Tooltip("Omnidirectional restriction on how far each joint can bend, in degrees. "+
-        "If a joint along the chain has an IKJoint component, its constraints are used instead" +
+        "Overriden if a joint has an IKJoint component" +
         "WARNING: May not be respected if a pole target exists for this chain")] // TODO can I fix that?
         [Range(0,180)]public float maxBendAngle = 180f;
 
-        [Tooltip("If gizmos are enabled, represent the chain as lines between the joints")]
+        /// <summary>Editor only: If gizmos are enabled, represent the chain as lines between the joints</summary>
+        [Tooltip("Editor only: If gizmos are enabled, represent the chain as lines between the joints")]
         [SerializeField] private bool drawChain;
 
         // TODO put these in an "advanced" dropdown. Will require custom drawer
+        /// <summary>
+        /// Acceptable distance from target if target is reachable and more iterations of FABRIK are allowed.
+        /// WARNING: If this is too precise, it can cause a crash if there is no cap on iterations
+        /// </summary>
         [Tooltip("Acceptable distance from target if target is reachable and more iterations of FABRIK are allowed." +
                  " WARNING: If this is too precise, it can cause a crash if there is no cap on iterations")]
         public float tolerance = 0.01f;
 
-        [Tooltip("Maximum number of iterations of FABRIK before finishing.")]
+        /// <summary>Maximum number of iterations of position-solving algorithm before finishing.</summary>
+        [Tooltip("Maximum number of iterations of position-solving algorithm before finishing.")]
         [SerializeField] private int maxIterations = 10;
+
+        /// <summary>If true, joint positions will be updated in FixedUpdate. If false, they will be updated in Update.</summary>
         [Tooltip("If true, joint positions will be updated in FixedUpdate. If false, they will be updated in Update")]
         [SerializeField] private bool iterateInFixedUpdate = true;
 
         
-        // Transform of this GameObject
+        /// Transform of this GameObject. Acts as root of the chain
         private Transform rootJoint; 
 
         // index 0 is the position of the root. Length is # of joints
@@ -63,7 +85,7 @@ namespace ahanlindev
     
         private void Awake() {
             rootJoint = transform;
-            CheckValidity(true);
+            CheckValidity(printErr: true);
             Init();
         }
 
@@ -72,7 +94,7 @@ namespace ahanlindev
             // need to ensure validity to draw gizmos TODO move this?
             if (drawChain && !isValid) {
                 rootJoint = transform;
-                CheckValidity(false);
+                CheckValidity(printErr: false);
             }
         }
 
@@ -100,11 +122,11 @@ namespace ahanlindev
             #endif
         }
 
-         /**
-         * Initializes the list of transforms and distances that form the joints 
-         * between this object and the end effector
-         * Prerequisite: This IKChain must be valid
-         */
+        /// <summary>
+        /// Initializes the list of transforms and distances that form the joints 
+        /// between this object and the end effector.
+        /// Prerequisite: This IKChain must be valid
+        /// </summary>
          private void Init() {
             if (!isValid) {return;}
             jointTransforms = new List<Transform>();
@@ -142,11 +164,11 @@ namespace ahanlindev
             jointConstraintComponents.Reverse();
         }
 
-        /** 
-         * Performs the FABRIK algorithm to solve for locations for each joint. 
-         * If the chain is invalid or there is no target, returns immediately.
-         * This method is heavily based upon the paper cited in the README.
-         */
+        /// <summary>
+        /// Performs the FABRIK algorithm to solve for locations for each joint. 
+        /// If the chain is invalid or there is no target, returns immediately.
+        /// This method is heavily based upon the paper cited in the README.
+        /// </summary>
         private void SolveChain() {
             if (target == null) { return; }
 
@@ -171,10 +193,10 @@ namespace ahanlindev
             // Update joint transforms with the calculated positions and rotations
             SetPositionsAndRotations();
         }   
-        
-        /**
-         * Updates the lists of information necessary for each frame
-         */
+
+        /// <summary>
+        /// Updates the lists of information necessary for each frame
+        /// </summary>
         private void UpdateLists() {
             jointDistances = new List<float>(); // clear lists and rebuild them
             jointPositions = new List<Vector3>();
@@ -192,10 +214,10 @@ namespace ahanlindev
                 }
             }
         }
-        /**
-         * Set each joint at the appropriate distance along the line between the root and 
-         * the target, with respect to constraints
-         */
+        /// <summary>
+        /// Set each joint at the appropriate distance along the line between the root and 
+        /// the target, with respect to constraints
+        /// </summary>
         private void HandleUnreachableTarget() {
             for(int i = 0; i < jointDistances.Count; i++) {
                 Vector3 current = jointPositions[i];
@@ -216,10 +238,10 @@ namespace ahanlindev
             }
         }
 
-        /**
-         * Iteratively approximates the end effector towards the target point, stopping when
-         * it either reaches the threshold or the maximum allowed iterations.
-         */
+        /// <summary>
+        /// Iteratively approximates the end effector towards the target point, stopping when
+        /// it either reaches the threshold or the maximum allowed iterations.
+        /// </summary>
         private void HandleReachableTarget() {
             // If end effector isn't on target, iterate the algorithm
             int iteration = 0;
@@ -229,9 +251,9 @@ namespace ahanlindev
             }
         }
 
-        /** 
-         * Handles the forward portion of the FABRIK algorithm
-         */
+        /// <summary>
+        /// Handles the forward portion of the FABRIK algorithm
+        /// </summary>
         private void HandleForward() {
             // Set end effector position to target
             jointPositions[jointPositions.Count -1] = target.position;
@@ -257,9 +279,8 @@ namespace ahanlindev
             }
         }
 
-        /**
-         * Handles the backward portion of the FABRIK algorithm
-         */
+        
+        /// <summary>Handles the backward portion of the FABRIK algorithm</summary>
         private void HandleBackward() {
             // Set root position to start (transform positions only updated at end of algo)
             jointPositions[0] = rootJoint.position;
@@ -285,14 +306,17 @@ namespace ahanlindev
             }
         }
 
-        /**
-         * Returns the normalized vector that represents the nearest direction to dir that is 
-         * compatible with the constraints of the joint at the specified index
-         * @param dir: The direction to be constrained
-         * @param index: The index of the relevant joint
-         * @param startAtRoot: If true, uses established positions of ancestors to get the constraint direction.
-         * If false, uses established descendant positions
-         */
+        /// <summary>
+        /// Calculates the nearest direction to dir that is 
+        /// compatible with the constraints of the joint at the specified index
+        /// </summary>
+        /// <param name="dir">The direction to be constrained.</param>
+        /// <param name="index">The index of the relevant joint.</param>
+        /// <param name="startAtRoot">
+        /// If true, uses established positions of ancestors to get the constraint direction. 
+        /// If false, uses established descendant positions.
+        /// </param>
+        /// <returns>Normalized vector closest to dir that is compatible with constraints.</returns>
         private Vector3 ConstrainDirection(Vector3 dir, int index, bool startAtRoot) {
             dir = dir.normalized; // ensures that dir is normalized
             //Vector3 constraintDir; = GetJointConstraintDirection(index, startAtRoot);
@@ -319,11 +343,16 @@ namespace ahanlindev
             else return dir;
         }
 
-        /**
-         * Returns the normalized vector that marks the center of the cone of angular constraint around
-         * the joint at the specified index. Assumes that ancestor joint positions are fixed and will be
-         * used to calculate this direction.
-         */
+        /// <summary>
+        /// Finds the direction that marks the center of the cone of angular constraint around
+        /// the joint at the specified index, with respect to ancestors. 
+        /// Assumes that ancestor joint positions are fixed and will be
+        /// used to calculate this direction.
+        /// </summary>
+        /// <param name="index">index of the joint to get the restraint from.</param>
+        /// <returns>
+        /// The normalized vector representing the orientation of the constraint cone of the specified joint
+        /// </returns>
         private Vector3 GetConstraintDirection(int index) {
             Vector3 constraintDir;
             IKJoint constraint = jointConstraintComponents[index]; 
@@ -349,11 +378,14 @@ namespace ahanlindev
             return constraintDir;
         }
 
-        /**
-         * Returns the normalized vector that marks the center of the cone of angular constraint around
-         * the joint at the specified index. Assumes that descendant joints are fixed and may be used to
-         * calculate this direction.
-         */
+        /// <summary>
+        /// Finds the direction that marks the center of the cone of angular constraint around
+        /// the joint at the specified index, with respect to descendants. 
+        /// Assumes that descendant joints are fixed and may be used to
+        /// calculate this direction.
+        /// </summary>
+        /// <param name="index">index of the joint to get the restraint from.</param>
+        /// <returns>The normalized vector representing the inverted cone of angular constraint</returns>
         private Vector3 GetInvertedConstraintDirection(int index) {
             Vector3 constraintDir;
             IKJoint constraint = jointConstraintComponents[index];
@@ -379,10 +411,10 @@ namespace ahanlindev
             return constraintDir;
         }
 
-        /**
-         * Adjusts each joint in the chain so that it bends towards the pole target. 
-         * TODO Make this play nicely with angle constraints
-         */
+        /// <summary>
+        /// Adjusts each joint in the chain so that it bends towards the pole target. 
+        /// TODO Make this play nicely with angle constraints
+        /// </summary>
         private void HandlePoleConstraint() {
             // loop condition here only respects pole if there are three or more joints
             for(int i = 1; i < jointTransforms.Count - 1; i++) {
@@ -412,8 +444,10 @@ namespace ahanlindev
             }       
         }
  
-        // Updates transform positions with the positions calculated by the algorithm,
-        // and sets rotation of objects to be reasonable to the positional changes 
+        /// <summary>
+        /// Updates transform positions with the positions calculated by the algorithm,
+        /// and sets rotation of objects to be reasonable to the positional changes 
+        /// </summary>
         private void SetPositionsAndRotations() {
             for(int i = 0; i < jointPositions.Count - 1; i++) {
                 Vector3 current = jointPositions[i];
@@ -433,10 +467,9 @@ namespace ahanlindev
             }
         }
 
-        /**
-         * Checks that each field of this object contains valid data
-         * @param printErr: Print out an error message if invalid
-         */
+        /// <summary> Checks that each field of this object contains valid data </summary>
+        /// <param name="printErr">Print out an error message if chain is invalid</param>
+        /// <returns>True if chain is valid. Otherwise false.</returns>
         private bool CheckValidity(bool printErr) {
             bool MISSING_END_EFFECTOR = endEffector == null;
             bool NON_DESCENDANT_EE = !(MISSING_END_EFFECTOR);
@@ -464,10 +497,10 @@ namespace ahanlindev
             return isValid;
         }
 
-        /** 
-         * Draws a magenta line between the joints of this kinematic chain
-         * MUST BE CALLED IN OnDrawGizmos or OnDrawGizmosSelected!
-         */
+        /// <summary>
+        /// Draws a magenta line between the joints of this kinematic chain
+        /// MUST BE CALLED IN OnDrawGizmos or OnDrawGizmosSelected!
+        /// </summary>
         private void DrawChainGizmo() {
             if (drawChain) {
                 if (isValid) {

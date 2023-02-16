@@ -2,7 +2,7 @@
 
 This is a small inverse kinematics package for Unity3D primarily based upon the Forward-and-Backward-Reaching Inverse Kinematics (FABRIK) algorithm. At this time is has support for pole targets and joint-level angular constraints on top of basic functionality.
 
-For instructions on usage, see the documentation.
+For instructions on usage, see the [documentation](/Documentation~/DOCUMENTATION.md).
 
 ## Sources
 

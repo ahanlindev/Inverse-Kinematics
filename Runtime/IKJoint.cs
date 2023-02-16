@@ -4,6 +4,9 @@ using UnityEngine;
 
 namespace ahanlindev
 {
+    /// <summary>
+    /// Helper component for IKChain. Describes custom joint constraints for a joint within an inverse kinematics chain.
+    /// </summary>
     public class IKJoint : MonoBehaviour
     {
         [Tooltip("The direction that denotes the orientation of the constraint cone")]
@@ -54,20 +57,20 @@ namespace ahanlindev
             }
             #endif
         }
-        /**
-         * Returns the direction vector that marks the center of the mobility cone
-         * This vector does not account for any rotations upon the parent of this joint
-         * This vector will be normalized.
-         */
+        /// <summary>
+        /// Returns the direction vector that marks the center of the mobility cone
+        /// This vector does not account for any rotations upon the parent of this joint
+        /// This vector will be normalized.
+        /// <summary>
         public Vector3 GetDirection() {
             return direction.normalized;
         }
 
 
-        /**
-         * Draws a cone that represents the mobility range of the joint.
-         * Can only be called in OnDrawGizmos
-         */
+        /// <summary>
+        /// Draws a cone that represents the mobility range of the joint.
+        /// Can only be called in OnDrawGizmos
+        /// </summary>
         private void DrawConeGizmo() {
             if(!isActiveAndEnabled) {return;}
 
