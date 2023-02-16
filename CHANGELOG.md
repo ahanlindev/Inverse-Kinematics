@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Updated
 
- - Better in-code documentation for IKChain and IKJoint components for use in code
+ - Better in-code documentation for `IKChain` and `IKJoint` components for use in code
 
 ## [0.2.1] - 2022-05-09
 
